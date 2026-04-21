@@ -73,12 +73,13 @@ def login():
             # We need to compare the provided password with the stored hash.
             # For this to work, the init_db function and registration should hash passwords.
             # Assuming init_db() has been updated to hash the default password.
-            # For the login, we need to fetch the hash and compare.
+            # For the login, we need to fetch the hash first.
             # Let's refactor this part to fetch the hash first.
 
             conn = sqlite3.connect('users.db')
             cursor = conn.cursor()
-            cursor.execute("SELECT password FROM users WHERE username = ?", (username,))
+            cursor.execute("SELECT password FROM users WHERE username = ?"
+, (username,))
             stored_user = cursor.fetchone()
             conn.close()
 
@@ -229,22 +230,32 @@ def show_logs():
         return redirect('/login')
 
     # Path traversal vulnerability
-    log_path = request.args.get('file', 'app.log')
+    LOG_DIR = '/var/log/app_logs'
+    filename = request.args.get('file', 'app.log')
+    requested_file = os.path.join(LOG_DIR, filename)
+    absolute_path = os.path.abspath(requested_file)
+
+    # Ensure the resolved absolute path is within the LOG_DIR
+    if os.path.commonprefix([absolute_path, os.path.abspath(LOG_DIR)]) != os.path.abspath(LOG_DIR):
+        return render_template('logs.html', error="Access denied: path traversal attempt detected.", log_file=filename)
 
     try:
-        with open(log_path, 'r') as f:
+        with open(absolute_path, 'r') as f:
             content = f.read()
-        return render_template('logs.html', content=content, log_file=log_path)
+        return render_template('logs.html', content=content, log_file=filename)
     except Exception as e:
-        return render_template('logs.html', error=str(e), log_file=log_path)
+        return render_template('logs.html', error=str(e), log_file=filename)
 
 if __name__ == '__main__':
     # Create uploads directory if it doesn't exist
     os.makedirs('uploads', exist_ok=True)
+    # Create log directory if it doesn't exist
+    os.makedirs(LOG_DIR, exist_ok=True)
 
     # Create a sample data.txt file for the search function
     with open('data.txt', 'w') as f:
-        f.write("Sample data line 1\nAnother line of data\nSecurity vulnerabilities are dangerous\n")
+        f.write("This is a sample file for testing the search functionality.\n")
+        f.write("It contains some sample data.\n")
+        f.write("Another line of text.\n")
 
-    # Running with debug=True is a security risk in production
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True)
